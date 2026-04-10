@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能 Agent - 自定义工具助手</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f2f5;
+            display: flex;
+            height: 100vh;
+        }
+        /* 聊天区域 */
+        .chat-container {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-right: 20px;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .user {
+            align-self: flex-end;
+            background: #0084ff;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .assistant {
+            align-self: flex-start;
+            background: #e4e6eb;
+            color: black;
+            border-bottom-left-radius: 4px;
+        }
+        .input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #ddd;
+            background: white;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 24px;
+            outline: none;
+            font-size: 1rem;
+        }
+        .input-area button {
+            margin-left: 10px;
+            padding: 10px 20px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+        }
+        .input-area button:hover {
+            background: #1a2a3a;
+        }
+        /* 工具管理面板 */
+        .tools-panel {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .tools-header {
+            background: #27ae60;
+            color: white;
+            padding: 15px;
+            font-weight: bold;
+        }
+        .tools-list {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        .tool-item {
+            background: #f8f9fa;
+            border-left: 4px solid #27ae60;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+        }
+        .tool-name {
+            font-weight: bold;
+        }
+        .tool-desc {
+            font-size: 0.85rem;
+            color: #555;
+            margin: 5px 0;
+        }
+        .tool-actions {
+            text-align: right;
+        }
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        .add-tool-form {
+            padding: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .add-tool-form input, .add-tool-form textarea, .add-tool-form select {
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        .add-tool-form textarea {
+            height: 80px;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+        .add-tool-form button {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px;
+            width: 100%;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .builtin-badge {
+            font-size: 0.7rem;
+            background: #3498db;
+            color: white;
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 12px;
+            margin-left: 8px;
+        }
+        hr {
+            margin: 10px 0;
+        }
+        .loading {
+            opacity: 0.7;
+        }
+        small {
+            font-size: 0.7rem;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+<div class="chat-container">
+    <div class="chat-header">🤖 智能 Agent（支持自定义工具）</div>
+    <div class="messages" id="messages">
+        <div class="message assistant">你好！我可以帮你查IP、问答案之书、查路线、查天气，你也可以自己添加新的工具（比如调用任何HTTP API）。试试问我吧！</div>
+    </div>
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button onclick="sendMessage()">发送</button>
+    </div>
+</div>
+<div class="tools-panel">
+    <div class="tools-header">🛠️ 工具管理</div>
+    <div class="tools-list" id="toolsList">
+        <div>加载中...</div>
+    </div>
+    <div class="add-tool-form">
+        <h4>➕ 添加自定义工具</h4>
+        <input type="text" id="toolName" placeholder="工具名称 (英文，如 get_news)">
+        <input type="text" id="toolDesc" placeholder="工具描述 (告诉AI何时使用)">
+        <textarea id="toolParams" placeholder='参数Schema (JSON格式，例如：{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]})'></textarea>
+        <input type="text" id="toolUrl" placeholder="API URL (GET请求会将参数作为Query String，POST作为JSON Body)">
+        <select id="toolMethod">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+        </select>
+        <button onclick="addTool()">添加工具</button>
+        <small>提示：添加后AI会在适当时自动调用。请确保参数名与Schema一致。</small>
+    </div>
+</div>
+
+<script>
+    let conversationHistory = [];
+
+    // 加载工具列表
+    async function loadTools() {
+        try {
+            const res = await fetch('/api/tools');
+            if (!res.ok) throw new Error('加载工具失败');
+            const data = await res.json();
+            const container = document.getElementById('toolsList');
+            let html = '<div><strong>📌 内置工具</strong><br>';
+            data.builtin.forEach(name => {
+                html += `<span style="background:#3498db; color:white; padding:2px 8px; border-radius:16px; display:inline-block; margin:3px;">${escapeHtml(name)}</span> `;
+            });
+            html += '</div><hr><strong>🔧 自定义工具</strong><div id="customToolsList">';
+            if (data.custom.length === 0) {
+                html += '<div style="color:#888; margin-top:5px;">暂无自定义工具</div>';
+            } else {
+                data.custom.forEach(tool => {
+                    html += `
+                        <div class="tool-item">
+                            <div class="tool-name">${escapeHtml(tool.name)}</div>
+                            <div class="tool-desc">${escapeHtml(tool.description)}</div>
+                            <div class="tool-actions">
+                                <button class="delete-btn" onclick="deleteTool('${tool.name}')">删除</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        } catch(e) {
+            document.getElementById('toolsList').innerHTML = '<div style="color:red">加载工具失败：' + e.message + '</div>';
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // 添加自定义工具
+    async function addTool() {
+        const name = document.getElementById('toolName').value.trim();
+        const description = document.getElementById('toolDesc').value.trim();
+        let paramsStr = document.getElementById('toolParams').value.trim();
+        const apiUrl = document.getElementById('toolUrl').value.trim();
+        const method = document.getElementById('toolMethod').value;
+
+        if (!name || !description || !paramsStr || !apiUrl) {
+            alert('请填写所有字段');
+            return;
+        }
+
+        let parameters;
+        try {
+            parameters = JSON.parse(paramsStr);
+            if (!parameters.type || !parameters.properties) {
+                throw new Error('参数Schema必须包含 type 和 properties');
+            }
+        } catch(e) {
+            alert('参数Schema格式错误，必须是有效的JSON。示例：{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}');
+            return;
+        }
+
+        const tool = {
+            name: name,
+            description: description,
+            parameters: parameters,
+            api_url: apiUrl,
+            method: method
+        };
+
+        try {
+            const res = await fetch('/api/tools', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(tool)
+            });
+            if (res.ok) {
+                alert('工具添加成功');
+                document.getElementById('toolName').value = '';
+                document.getElementById('toolDesc').value = '';
+                document.getElementById('toolParams').value = '';
+                document.getElementById('toolUrl').value = '';
+                loadTools();
+            } else {
+                const err = await res.json();
+                alert('添加失败：' + (err.error || '未知错误'));
+            }
+        } catch(e) {
+            alert('请求失败：' + e.message);
+        }
+    }
+
+    // 删除自定义工具
+    async function deleteTool(name) {
+        if (!confirm(`确定删除工具 "${name}" 吗？`)) return;
+        try {
+            const res = await fetch(`/api/tools/${name}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadTools();
+            } else {
+                const err = await res.json();
+                alert('删除失败：' + (err.error || '未知错误'));
+            }
+        } catch(e) {
+            alert('请求失败：' + e.message);
+        }
+    }
+
+    // 发送消息
+    async function sendMessage() {
+        const input = document.getElementById('userInput');
+        const msg = input.value.trim();
+        if (!msg) return;
+        input.value = '';
+
+        addMessage(msg, 'user');
+        const loadingId = addLoadingMessage();
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: msg,
+                    history: conversationHistory
+                })
+            });
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`服务器错误 (${res.status}): ${errorText}`);
+            }
+            const data = await res.json();
+            removeLoadingMessage(loadingId);
+            if (data.error) {
+                addMessage('错误：' + data.error, 'assistant');
+            } else {
+                addMessage(data.answer, 'assistant');
+                // 更新对话历史（后端返回的完整历史）
+                conversationHistory = data.history;
+            }
+        } catch(e) {
+            removeLoadingMessage(loadingId);
+            addMessage('请求失败：' + e.message, 'assistant');
+        }
+    }
+
+    function addMessage(text, role) {
+        const messagesDiv = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = `message ${role}`;
+        div.textContent = text;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addLoadingMessage() {
+        const messagesDiv = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = 'message assistant loading';
+        div.id = 'loading-msg';
+        div.textContent = '🤔 思考中...';
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        return div.id;
+    }
+
+    function removeLoadingMessage(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
+
+    // 初始化
+    loadTools();
+</script>
+</body>
+</html>
