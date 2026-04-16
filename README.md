@@ -21,7 +21,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/sunningassun/Agent-Web.git
 cd agent_web
 ```
 
